@@ -1,6 +1,10 @@
 # 售后智能客服 Agent — POC
 
-基于 **LangGraph + RAG** 的多轮对话售后客服系统，支持意图识别、知识库检索、引用溯源、工单创建与多语言服务。
+[![Live Demo](https://img.shields.io/badge/demo-vercel-black)](https://frontend-tau-green-71.vercel.app) [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
+基于 **LangGraph + RAG** 的多轮对话售后客服系统，支持意图识别、知识库检索、引用 溯源、工单创建与多语言服务。
+
+> 线上演示：https://frontend-tau-green-71.vercel.app （仅前端，对话功能需自行部署后端并配置 `BACKEND_URL`）
 
 ## 技术栈
 

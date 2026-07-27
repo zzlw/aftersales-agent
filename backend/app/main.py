@@ -13,6 +13,7 @@ from app.api.chat import router as chat_router
 from app.api.kb import router as kb_router
 from app.api.ticket import router as ticket_router
 from app.config import settings
+from app.rag.ingest import ingest
 from app.rag.store import init_schema
 
 
@@ -28,6 +29,13 @@ async def lifespan(app: FastAPI):
     await checkpointer.setup()
     await init_schema(pool)   # kb_chunks / tickets 表与索引
     set_pool(pool)            # 节点层检索用
+
+    # 首次部署时知识库为空，自动摄取一次（云端无法手动进容器时的兼容路径）
+    async with pool.connection() as conn:
+        row = await (await conn.execute("SELECT count(*) AS n FROM kb_chunks")).fetchone()
+    if row["n"] == 0:
+        stats = await ingest(pool)
+        print(f"[startup] knowledge base empty, auto-ingested: {stats}")
 
     app.state.pool = pool
     app.state.graph = build_graph(checkpointer)

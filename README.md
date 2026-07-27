@@ -1,22 +1,44 @@
 # 售后智能客服 Agent — POC
 
-[![Live Demo](https://img.shields.io/badge/demo-vercel-black)](https://frontend-tau-green-71.vercel.app) [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+<p align="left">
+  <a href="https://frontend-tau-green-71.vercel.app"><img src="https://img.shields.io/badge/Live_Demo-online-success?logo=vercel&logoColor=white" alt="Live Demo"></a>
+  <a href="https://github.com/zzlw/aftersales-agent/deployments"><img src="https://img.shields.io/github/deployments/zzlw/aftersales-agent/production?label=CI%2FCD&logo=githubactions&logoColor=white" alt="CI/CD"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License: MIT"></a>
+  <a href="https://github.com/zzlw/aftersales-agent/commits/main"><img src="https://img.shields.io/github/last-commit/zzlw/aftersales-agent?logo=git&logoColor=white" alt="Last Commit"></a>
+</p>
 
-基于 **LangGraph + RAG** 的多轮对话售后客服系统，支持意图识别、知识库检索、引用 溯源、工单创建与多语言服务。
+<p align="left">
+  <img src="https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs&logoColor=white" alt="Next.js 16">
+  <img src="https://img.shields.io/badge/React-19-087ea4?logo=react&logoColor=white" alt="React 19">
+  <img src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
+  <img src="https://img.shields.io/badge/Tailwind_CSS-v4-38BDF8?logo=tailwindcss&logoColor=white" alt="Tailwind CSS v4">
+  <img src="https://img.shields.io/badge/shadcn%2Fui-new--york-18181B?logo=shadcnui&logoColor=white" alt="shadcn/ui">
+  <img src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white" alt="Python 3.12">
+  <img src="https://img.shields.io/badge/FastAPI-SSE-009688?logo=fastapi&logoColor=white" alt="FastAPI">
+  <img src="https://img.shields.io/badge/LangGraph-0.4-1C3C3C?logo=langchain&logoColor=white" alt="LangGraph">
+  <img src="https://img.shields.io/badge/PostgreSQL-16_%2B_pgvector-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL + pgvector">
+  <img src="https://img.shields.io/badge/Vercel-frontend-black?logo=vercel&logoColor=white" alt="Vercel">
+  <img src="https://img.shields.io/badge/Railway-backend%20%2B%20db-0B0D0E?logo=railway&logoColor=white" alt="Railway">
+  <img src="https://img.shields.io/badge/DeepSeek-LLM-4D6BFE" alt="DeepSeek">
+  <img src="https://img.shields.io/badge/SiliconFlow-bge--m3-8A2BE2" alt="SiliconFlow">
+</p>
 
-> 线上演示：https://frontend-tau-green-71.vercel.app （仅前端，对话功能需自行部署后端并配置 `BACKEND_URL`）
+基于 **LangGraph + RAG** 的多轮对话售后客服系统，支持意图识别、知识库检索、引用溯源、工单创建与多语言服务。
+
+> 🚀 **在线体验**：https://frontend-tau-green-71.vercel.app （全栈已部署，对话 / 引用溯源 / 工单功能均可直接使用）
 
 ## 技术栈
 
 | 层 | 技术 |
 |---|------|
-| LLM | DeepSeek API（OpenAI 兼容） |
-| Embedding | 硅基流动 BAAI/bge-m3（1024 维） |
-| Agent 框架 | LangGraph 0.4 + AsyncPostgresSaver |
-| 后端 | FastAPI + SSE 流式推送 |
-| 前端 | Next.js 15 + React 19 + Tailwind 4 |
-| 数据库 | PostgreSQL 16 + pgvector（HNSW） |
-| 部署 | Docker Compose 一键启动 |
+| LLM | DeepSeek API（OpenAI 兼容，`deepseek-chat`） |
+| Embedding | 硅基流动 SiliconFlow BAAI/bge-m3（1024 维） |
+| Agent 框架 | LangGraph 0.4 + AsyncPostgresSaver（会话持久化） |
+| 后端 | Python 3.12 + FastAPI + SSE 流式推送 |
+| 前端 | Next.js 16（App Router + Turbopack + React Compiler）+ React 19 + TypeScript |
+| UI | Tailwind CSS v4 + shadcn/ui + Motion（动画）+ Geist 字体 |
+| 数据库 | PostgreSQL 16 + pgvector（HNSW 索引） |
+| 部署 | 生产：Vercel（前端）+ Railway（后端 + 数据库）；本地：Docker Compose 一键启动 |
 
 ## 架构概览
 
@@ -54,6 +76,46 @@
 │   kb_chunks (向量+全文) │ tickets │ checkpoints  │
 └─────────────────────────────────────────────────┘
 ```
+
+## 云端部署与 CI/CD
+
+生产环境采用“前后端分离部署”：前端跑在 Vercel（Serverless / Edge），后端和数据库跑在 Railway（常驻容器）——因为 LangGraph 冷启动重、SSE 长连接会被 Serverless 执行时长限制掰断，不适合函数化。
+
+```
+        用户浏览器
+            │ HTTPS
+┌───────────▼────────────┐      ┌────────────────────────┐
+│   Vercel（前端）          │      │   Railway（后端）           │
+│  · Next.js SSR 预渲染      │ SSE  │  · FastAPI + LangGraph      │
+│  · /api/* Route Handler   │────▶│  · 启动时自动 ingest 知识库 │
+│    （代理转发 BACKEND_URL）│      │            │                │
+└────────────────────────┘      │  ┌────────▼─────────┐   │
+            ▲                      │  │ PostgreSQL 16      │   │
+            │ push main 自动部署    │  │ + pgvector（持久卷）│   │
+┌───────────┴────────────┐      │  └───────────────────┘   │
+│   GitHub（开源仓库）       │      └────────────────────────┘
+└────────────────────────┘
+```
+
+| 环节 | 平台 / 方式 | 说明 |
+|---|---|---|
+| 代码托管 | GitHub（本仓库，MIT 开源） | `main` 为生产分支 |
+| 前端 CI/CD | Vercel 原生 Git 集成 | **push main → 自动构建 + 生产部署**；PR → 自动 Preview 环境；Root Directory 设为 `frontend/`（monorepo 子目录） |
+| 前端托管 | Vercel Serverless | SSR + 三个 Route Handler（`/api/chat` `/api/history/[sid]` `/api/ticket`）仅做代理，通过环境变量 `BACKEND_URL` 转发到 Railway |
+| 后端托管 | Railway 容器（Dockerfile 构建） | 常驻进程支持 SSE 长连接；启动时检测知识库为空则自动 ingest |
+| 数据库 | Railway PostgreSQL（pgvector 镜像 + 持久化卷） | 向量检索 / 全文检索 / 工单 / LangGraph checkpoint 同库 |
+| 密钥管理 | Vercel / Railway 环境变量 | `.env` 不入库，仓库仅提供 `.env.example` 占位模板 |
+
+## 第三方服务清单
+
+| 服务 | 用途 | 费用 |
+|---|---|---|
+| [DeepSeek](https://platform.deepseek.com) | 对话 LLM（意图路由 / 答案生成 / 检索评估，OpenAI 兼容接口） | 按量付费，极低 |
+| [硅基流动 SiliconFlow](https://siliconflow.cn) | Embedding（BAAI/bge-m3，中英双语 1024 维） | 免费额度足够 |
+| [Vercel](https://vercel.com) | 前端托管 + CI/CD | Hobby 免费 |
+| [Railway](https://railway.com) | 后端容器 + PostgreSQL | 免费额度起步 |
+| [GitHub](https://github.com) | 代码托管 / 部署触发源 | 免费 |
+| [shields.io](https://shields.io) | README 徽标 | 免费 |
 
 ## 核心能力
 

@@ -1,0 +1,10 @@
+.env
+node_modules/
+.next/
+__pycache__/
+*.pyc
+.DS_Store
+.vercel
+
+# 面试/个人材料，不随开源仓库发布
+docs/

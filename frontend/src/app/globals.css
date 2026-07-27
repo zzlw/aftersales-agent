@@ -1,0 +1,108 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+@import "tw-animate-css";
+/* shadcn 共享工具类（shimmer 等，自动适配 reduced-motion） */
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* 主题锁定：整站浅色（品牌既有决策，POC 演示场景）
+   唯一 accent：联想品牌红 #E2231A，全局一致
+   圆角系统：soft（基准 12px），全站统一 */
+:root {
+  color-scheme: light;
+  --radius: 0.75rem;
+
+  --background: #f6f6f7;
+  --foreground: #18181b;
+  --card: #fcfcfc;
+  --card-foreground: #18181b;
+  --popover: #fcfcfc;
+  --popover-foreground: #18181b;
+  --primary: #e2231a;
+  --primary-foreground: #fef6f5;
+  --secondary: #f0f0f1;
+  --secondary-foreground: #27272a;
+  --muted: #f0f0f1;
+  --muted-foreground: #6b6b74;
+  --accent: #fdf0ef;
+  --accent-foreground: #b91c1c;
+  --destructive: #dc2626;
+  --destructive-foreground: #fef6f5;
+  --border: #e5e5e8;
+  --input: #dcdce0;
+  --ring: #e2231a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+body {
+  @apply bg-background text-foreground font-sans antialiased;
+}
+
+/* Tailwind v4 Preflight 将默认边框色改为 currentColor，shadcn 官方 base 层兼容：统一回退到语义 border 色 */
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+}
+
+/* Tailwind v4 Preflight 将按钮默认光标改为 default，全局恢复手型（禁用态保持默认箭头） */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+/* Collapsible 展开/收起高度过渡（Radix 提供内容高度变量） */
+@keyframes collapsible-down {
+  from { height: 0; opacity: 0.6; }
+  to { height: var(--radix-collapsible-content-height); opacity: 1; }
+}
+
+@keyframes collapsible-up {
+  from { height: var(--radix-collapsible-content-height); opacity: 1; }
+  to { height: 0; opacity: 0.6; }
+}
+
+[data-slot="collapsible-content"] {
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-slot="collapsible-content"][data-state="open"] {
+    animation: collapsible-down 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  [data-slot="collapsible-content"][data-state="closed"] {
+    animation: collapsible-up 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}

@@ -83,9 +83,11 @@ function GithubIcon(props: React.SVGProps<SVGSVGElement>) {
 export default function Chat({
   initialMessages,
   sessionId,
+  resumeGenerating,
 }: {
   initialMessages?: Msg[];
   sessionId?: string | null;
+  resumeGenerating?: boolean;
 }) {
   // 历史消息已由 Server Component 预取（SSR 直出，无需客户端二次拉取）
   const [messages, setMessages] = useState<Msg[]>(initialMessages ?? []);
@@ -113,15 +115,9 @@ export default function Chat({
     });
   }, []);
 
-  const send = useCallback(
-    async (text: string) => {
-      const content = text.trim();
-      if (!content || busy) return;
-      setBusy(true);
-      setInput("");
-      setMessages((prev) => [...prev, { role: "user", content }]);
-      setStatus("已接收，正在处理…");
-
+  // 消费一条 SSE 流（首发 / 流恢复共用）：处理全部帧类型并增量构建 assistant 消息
+  const consumeStream = useCallback(
+    async (res: Response) => {
       // 本轮 pending 的执行事件（delta 到达前先积累，随后挂到 assistant 消息上）
       let pendingTimeline: TimelineEvent[] = [];
       let assistantStarted = false;
@@ -136,65 +132,78 @@ export default function Chat({
         ]);
       };
 
+      for await (const frame of parseSSE(res)) {
+        const d = frame.data as Record<string, any>;
+        switch (frame.event) {
+          case "status":
+            if (d.session_id && !sessionRef.current) {
+              sessionRef.current = String(d.session_id);
+              setSessionCookie(sessionRef.current);
+            }
+            setStatus(stageText(String(d.stage ?? "")));
+            break;
+          case "thinking":
+            pendingTimeline = [...pendingTimeline, { kind: "thinking", text: String(d.text ?? "") }];
+            if (assistantStarted) patchLast((m) => ({ ...m, timeline: pendingTimeline }));
+            break;
+          case "tool": {
+            const hits = Array.isArray(d.hits)
+              ? d.hits.map((h: any) => `${h.title}·${h.section}(${h.score})`).join("；")
+              : "";
+            pendingTimeline = [
+              ...pendingTimeline,
+              { kind: "tool", text: `${d.name}("${d.query}") → ${hits || "无命中"}` },
+            ];
+            if (assistantStarted) patchLast((m) => ({ ...m, timeline: pendingTimeline }));
+            break;
+          }
+          case "delta":
+            ensureAssistant();
+            patchLast((m) => ({ ...m, content: m.content + String(d.text ?? "") }));
+            break;
+          case "citation":
+            patchLast((m) => ({ ...m, citations: (d.items ?? []) as Citation[] }));
+            break;
+          case "suggest":
+            ensureAssistant();
+            patchLast((m) => ({
+              ...m,
+              suggests: (d.items ?? []) as string[],
+              suggestAction: d.action ? String(d.action) : undefined,
+            }));
+            break;
+          case "error":
+            setStatus(null);
+            setMessages((prev) => [
+              ...prev,
+              { role: "assistant", content: String(d.message ?? "服务异常"), error: true },
+            ]);
+            break;
+          case "done":
+            setStatus(null);
+            break;
+        }
+      }
+    },
+    [patchLast]
+  );
+
+  const send = useCallback(
+    async (text: string) => {
+      const content = text.trim();
+      if (!content || busy) return;
+      setBusy(true);
+      setInput("");
+      setMessages((prev) => [...prev, { role: "user", content }]);
+      setStatus("已接收，正在处理…");
+
       try {
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ session_id: sessionRef.current, message: content }),
         });
-
-        for await (const frame of parseSSE(res)) {
-          const d = frame.data as Record<string, any>;
-          switch (frame.event) {
-            case "status":
-              if (d.session_id && !sessionRef.current) {
-                sessionRef.current = String(d.session_id);
-                setSessionCookie(sessionRef.current);
-              }
-              setStatus(stageText(String(d.stage ?? "")));
-              break;
-            case "thinking":
-              pendingTimeline = [...pendingTimeline, { kind: "thinking", text: String(d.text ?? "") }];
-              if (assistantStarted) patchLast((m) => ({ ...m, timeline: pendingTimeline }));
-              break;
-            case "tool": {
-              const hits = Array.isArray(d.hits)
-                ? d.hits.map((h: any) => `${h.title}·${h.section}(${h.score})`).join("；")
-                : "";
-              pendingTimeline = [
-                ...pendingTimeline,
-                { kind: "tool", text: `${d.name}("${d.query}") → ${hits || "无命中"}` },
-              ];
-              if (assistantStarted) patchLast((m) => ({ ...m, timeline: pendingTimeline }));
-              break;
-            }
-            case "delta":
-              ensureAssistant();
-              patchLast((m) => ({ ...m, content: m.content + String(d.text ?? "") }));
-              break;
-            case "citation":
-              patchLast((m) => ({ ...m, citations: (d.items ?? []) as Citation[] }));
-              break;
-            case "suggest":
-              ensureAssistant();
-              patchLast((m) => ({
-                ...m,
-                suggests: (d.items ?? []) as string[],
-                suggestAction: d.action ? String(d.action) : undefined,
-              }));
-              break;
-            case "error":
-              setStatus(null);
-              setMessages((prev) => [
-                ...prev,
-                { role: "assistant", content: String(d.message ?? "服务异常"), error: true },
-              ]);
-              break;
-            case "done":
-              setStatus(null);
-              break;
-          }
-        }
+        await consumeStream(res);
       } catch (err) {
         console.error("[Chat] SSE error:", err);
         setStatus(null);
@@ -207,8 +216,28 @@ export default function Chat({
         setStatus(null);
       }
     },
-    [busy, patchLast]
+    [busy, consumeStream]
   );
+
+  // 流恢复（ChatGPT 同款）：刷新时若后端仍在生成，重连重放帧并续播本轮回答
+  const resumedRef = useRef(false);
+  useEffect(() => {
+    if (!resumeGenerating || !sessionRef.current || resumedRef.current) return;
+    resumedRef.current = true;
+    (async () => {
+      setBusy(true);
+      setStatus("正在恢复回答…");
+      try {
+        const res = await fetch(`/api/chat/stream/${sessionRef.current}`, { cache: "no-store" });
+        await consumeStream(res);
+      } catch (err) {
+        console.error("[Chat] resume error:", err);
+      } finally {
+        setBusy(false);
+        setStatus(null);
+      }
+    })();
+  }, [resumeGenerating, consumeStream]);
 
   const onSuggest = (label: string, action?: string) => {
     if (action === "ticket") setShowTicket(true);

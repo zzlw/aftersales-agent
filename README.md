@@ -171,7 +171,8 @@ cp .env.example .env
 # 编辑 .env 填入 LLM_API_KEY 和 EMBEDDING_API_KEY
 
 # 3. 启动后端服务（含数据库）
-docker compose up -d
+docker compose up -d db backend
+# 或全容器启动（含前端镜像，http://localhost:3000，可跳过第 5 步）：docker compose up -d
 
 # 4. 索引知识库（可选：启动时会按内容指纹自动摄取，此命令仅用于手动强制重建）
 curl -X POST http://localhost:8000/api/kb/reindex
@@ -235,7 +236,7 @@ aftersales-agent/
 ├── knowledge/              # 知识库语料（14 篇：5 产品线 + 通用政策）
 │   ├── zh/                 # 中文文档
 │   └── en/                 # 英文文档
-├── docker-compose.yml      # 本地一键启动（backend + db）
+├── docker-compose.yml      # 本地一键启动（db + backend + 可选 frontend 容器）
 ├── Dockerfile.railway      # Railway 后端镜像（app + knowledge 打包）
 ├── railway.json            # Railway 构建配置
 ├── AGENTS.md               # AI 协作约束文档
@@ -254,7 +255,7 @@ aftersales-agent/
 | `citation` | 引用溯源 | `{"items":[{"title":"...","snippet":"..."}]}` |
 | `suggest` | 建议操作 | `{"items":["转人工"],"action":"ticket"}` |
 | `done` | 对话结束 | `{"session_id":"..."}` |
-| `error` | 错误信息 | `{"message":"...","code":"..."}` |
+| `error` | 错误信息 | `{"message":"服务暂时不可用，请稍后重试（...）"}` |
 
 ### 流恢复（ChatGPT 同款）
 

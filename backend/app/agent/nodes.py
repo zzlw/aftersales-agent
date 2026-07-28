@@ -67,14 +67,16 @@ async def intent_router(state: AgentState) -> dict:
          {"role": "user", "content": f"已答话题清单：\n{topics_text}\n\n最近对话：\n{convo}"}],
         RouteResult,
     )
-    writer({"type": "thinking",
-            "text": f"意图={route.intent} 语言={route.language} 情绪={route.emotion} "
-                    f"产品线={route.product_line} 澄清={route.needs_clarification} 重复={route.is_repeat}"})
+    thinking = (f"意图={route.intent} 语言={route.language} 情绪={route.emotion} "
+                f"产品线={route.product_line} 澄清={route.needs_clarification} 重复={route.is_repeat}")
+    writer({"type": "thinking", "text": thinking})
     return {
         "intent": route.intent, "language": route.language, "emotion": route.emotion,
         "product_line": route.product_line,
         # 借用 state 暂存本轮路由中间结果（不进 checkpoint 长期语义）
         "_route": route.model_dump(),
+        # 本轮执行过程从这里重置，后续节点逐步追加，终态节点随消息持久化
+        "_timeline": [{"kind": "thinking", "text": thinking}],
     }
 
 
@@ -96,7 +98,8 @@ async def clarify_node(state: AgentState) -> dict:
         if state.get("language") == "zh"
         else "To help you better, could you share the product model and the exact symptom?")
     writer({"type": "delta", "text": question})
-    return {"messages": [{"role": "assistant", "content": question}],
+    return {"messages": [{"role": "assistant", "content": question,
+                          "timeline": state.get("_timeline", [])}],
             "clarify_count": state.get("clarify_count", 0) + 1}
 
 
@@ -110,6 +113,7 @@ async def redirect_node(state: AgentState) -> dict:
         writer({"type": "delta", "text": tok})
     writer({"type": "suggest", "items": _quick_questions(state.get("language", "zh"))})
     return {"messages": [{"role": "assistant", "content": full,
+                          "timeline": state.get("_timeline", []),
                           "suggests": _quick_questions(state.get("language", "zh"))}],
             "clarify_count": 0}
 
@@ -130,6 +134,7 @@ async def repeat_node(state: AgentState) -> dict:
     suggest = ["转人工客服" if state.get("language") == "zh" else "Talk to a human agent"]
     writer({"type": "suggest", "items": suggest, "action": "ticket"})
     return {"messages": [{"role": "assistant", "content": full,
+                          "timeline": state.get("_timeline", []),
                           "suggests": suggest, "suggest_action": "ticket"}],
             "clarify_count": 0}
 
@@ -139,10 +144,14 @@ async def retrieve_node(state: AgentState) -> dict:
     writer({"type": "status", "stage": "retrieving"})
     query = state["_route"]["search_query"] or state["messages"][-1]["content"]
     docs = await _do_search(query)
-    writer({"type": "tool", "name": "hybrid_search", "query": query,
-            "hits": [{"title": d["doc_title"], "section": d["section"],
-                      "score": round(float(d["score"]), 4)} for d in docs]})
-    return {"retrieved_docs": docs, "_query": query}
+    hits = [{"title": d["doc_title"], "section": d["section"],
+             "score": round(float(d["score"]), 4)} for d in docs]
+    writer({"type": "tool", "name": "hybrid_search", "query": query, "hits": hits})
+    # 持久化文本与前端实时帧的拼接格式保持一致，刷新前后展示无差异
+    hits_text = "；".join(f"{h['title']}·{h['section']}({h['score']})" for h in hits) or "无命中"
+    return {"retrieved_docs": docs, "_query": query,
+            "_timeline": state.get("_timeline", []) + [
+                {"kind": "tool", "text": f'hybrid_search("{query}") → {hits_text}'}]}
 
 
 async def grade_node(state: AgentState) -> dict:
@@ -151,7 +160,9 @@ async def grade_node(state: AgentState) -> dict:
     grade = await _grade(state["retrieved_docs"], state.get("product_line", "unknown"),
                          state["_query"])
     writer({"type": "thinking", "text": f"检索评估 = {grade}"})
-    return {"retrieval_grade": grade}
+    return {"retrieval_grade": grade,
+            "_timeline": state.get("_timeline", []) + [
+                {"kind": "thinking", "text": f"检索评估 = {grade}"}]}
 
 
 def grade_decision(state: AgentState) -> str:
@@ -188,7 +199,9 @@ async def generate_node(state: AgentState) -> dict:
          "snippet": docs[i - 1]["content"][:160]} for i in cited]
     writer({"type": "citation", "items": citations})
 
-    return {"messages": [{"role": "assistant", "content": full, "citations": citations}],
+    return {"messages": [{"role": "assistant", "content": full,
+                          "timeline": state.get("_timeline", []),
+                          "citations": citations}],
             "answered_topics": [{"topic": state["_query"], "conclusion": full[:120]}],
             "clarify_count": 0}
 
@@ -201,12 +214,15 @@ async def fallback_node(state: AgentState) -> dict:
         [{"role": "system", "content": prompts.REWRITE_SYSTEM},
          {"role": "user", "content": state["_query"]}], temperature=0)).strip()
     writer({"type": "thinking", "text": f"检索未命中，改写重试：{rewritten}"})
+    timeline = state.get("_timeline", []) + [
+        {"kind": "thinking", "text": f"检索未命中，改写重试：{rewritten}"}]
 
     docs = await _do_search(rewritten)
     grade = await _grade(docs, state.get("product_line", "unknown"), rewritten)
     if grade in ("sufficient", "partial"):
         return await generate_node({**state, "retrieved_docs": docs,
-                                    "retrieval_grade": grade, "_query": rewritten})
+                                    "retrieval_grade": grade, "_query": rewritten,
+                                    "_timeline": timeline})
 
     # 坦诚未覆盖，绝不编造（反幻觉红线）
     lang = state.get("language", "zh")
@@ -223,6 +239,7 @@ async def fallback_node(state: AgentState) -> dict:
     writer({"type": "delta", "text": answer})
     writer({"type": "suggest", "items": suggest, "action": "ticket"})
     return {"messages": [{"role": "assistant", "content": answer,
+                          "timeline": timeline,
                           "suggests": suggest, "suggest_action": "ticket"}],
             "clarify_count": 0}
 

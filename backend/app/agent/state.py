@@ -29,3 +29,4 @@ class AgentState(TypedDict, total=False):
     # 本轮中间结果（每轮覆写，不依赖历史语义）
     _route: dict          # 路由结构化输出全量
     _query: str           # 本轮检索查询（指代消解后）
+    _timeline: list[dict]  # 本轮执行过程 {kind, text}，intent_router 重置，随终态消息持久化

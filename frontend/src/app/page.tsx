@@ -13,10 +13,22 @@ async function fetchHistory(sid: string): Promise<Msg[]> {
     if (!res.ok) return [];
     const data = await res.json();
     if (!Array.isArray(data.messages)) return [];
-    return data.messages.map((m: { role: string; content: string }) => ({
-      role: m.role as Msg["role"],
-      content: m.content,
-    }));
+    // 除正文外，带回随消息持久化的引用溯源与建议问题（执行过程为实时信息，不持久化）
+    return data.messages.map(
+      (m: {
+        role: string;
+        content: string;
+        citations?: Msg["citations"];
+        suggests?: string[];
+        suggest_action?: string;
+      }) => ({
+        role: m.role as Msg["role"],
+        content: m.content,
+        citations: m.citations,
+        suggests: m.suggests,
+        suggestAction: m.suggest_action,
+      }),
+    );
   } catch {
     // 后端不可用时降级为空历史，不阻塞首屏
     return [];

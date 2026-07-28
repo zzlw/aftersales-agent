@@ -42,7 +42,9 @@ class RouteResult(BaseModel):
 
 
 def _recent_messages(state: AgentState) -> list[dict]:
-    return state["messages"][-MAX_HISTORY:]
+    # 只保留 role/content：消息上挂载的 citations/suggests 元数据不能透传给 LLM API
+    return [{"role": m["role"], "content": m["content"]}
+            for m in state["messages"][-MAX_HISTORY:]]
 
 
 def _lang_name(lang: str) -> str:
@@ -107,7 +109,9 @@ async def redirect_node(state: AgentState) -> dict:
         full += tok
         writer({"type": "delta", "text": tok})
     writer({"type": "suggest", "items": _quick_questions(state.get("language", "zh"))})
-    return {"messages": [{"role": "assistant", "content": full}], "clarify_count": 0}
+    return {"messages": [{"role": "assistant", "content": full,
+                          "suggests": _quick_questions(state.get("language", "zh"))}],
+            "clarify_count": 0}
 
 
 async def repeat_node(state: AgentState) -> dict:
@@ -123,9 +127,11 @@ async def repeat_node(state: AgentState) -> dict:
               "content": f"已答结论：{conclusion}\n\n用户最新消息：{state['messages'][-1]['content']}"}]):
         full += tok
         writer({"type": "delta", "text": tok})
-    writer({"type": "suggest", "items": ["转人工客服" if state.get("language") == "zh" else "Talk to a human agent"],
-            "action": "ticket"})
-    return {"messages": [{"role": "assistant", "content": full}], "clarify_count": 0}
+    suggest = ["转人工客服" if state.get("language") == "zh" else "Talk to a human agent"]
+    writer({"type": "suggest", "items": suggest, "action": "ticket"})
+    return {"messages": [{"role": "assistant", "content": full,
+                          "suggests": suggest, "suggest_action": "ticket"}],
+            "clarify_count": 0}
 
 
 async def retrieve_node(state: AgentState) -> dict:
@@ -175,13 +181,14 @@ async def generate_node(state: AgentState) -> dict:
         full += tok
         writer({"type": "delta", "text": tok})
 
-    # 引用溯源帧：只推送答案中实际引用到的来源
+    # 引用溯源：只保留答案中实际引用到的来源，实时帧 + 随消息持久化（刷新后仍可见）
     cited = [i for i in range(1, len(docs) + 1) if f"[{i}]" in full] or list(range(1, len(docs) + 1))
-    writer({"type": "citation", "items": [
+    citations = [
         {"index": i, "title": docs[i - 1]["doc_title"], "section": docs[i - 1]["section"],
-         "snippet": docs[i - 1]["content"][:160]} for i in cited]})
+         "snippet": docs[i - 1]["content"][:160]} for i in cited]
+    writer({"type": "citation", "items": citations})
 
-    return {"messages": [{"role": "assistant", "content": full}],
+    return {"messages": [{"role": "assistant", "content": full, "citations": citations}],
             "answered_topics": [{"topic": state["_query"], "conclusion": full[:120]}],
             "clarify_count": 0}
 
@@ -215,7 +222,9 @@ async def fallback_node(state: AgentState) -> dict:
         suggest = ["Escalate & create a ticket"]
     writer({"type": "delta", "text": answer})
     writer({"type": "suggest", "items": suggest, "action": "ticket"})
-    return {"messages": [{"role": "assistant", "content": answer}], "clarify_count": 0}
+    return {"messages": [{"role": "assistant", "content": answer,
+                          "suggests": suggest, "suggest_action": "ticket"}],
+            "clarify_count": 0}
 
 
 # ────────────────────── 内部工具 ──────────────────────

@@ -356,7 +356,8 @@ export default function Chat({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={springIn}
             >
-            <div className="max-w-[85%] space-y-1.5">
+            {/* min-w-0 允许在 flex 行内收缩；break-words 防长英文单词/URL 撑破气泡 */}
+            <div className="min-w-0 max-w-[85%] space-y-1.5 break-words">
               {/* 执行时间线（P1：Agent 过程可视化） */}
               {m.role === "assistant" && m.timeline && m.timeline.length > 0 && (
                 <Collapsible className="rounded-lg border border-border bg-muted/50 px-3 py-1.5">
@@ -409,7 +410,8 @@ export default function Chat({
                         <Collapsible key={c.index}>
                           <CollapsibleTrigger className="group flex w-full items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-accent-foreground">
                             <FileText className="size-3.5 shrink-0" />
-                            <span className="truncate text-left">
+                            {/* min-w-0 让 truncate 在 flex 内生效，否则 nowrap 长标题会撑宽气泡 */}
+                            <span className="min-w-0 flex-1 truncate text-left">
                               [{c.index}] {c.title}
                               {c.section ? ` · ${c.section}` : ""}
                             </span>

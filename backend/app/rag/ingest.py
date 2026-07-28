@@ -3,6 +3,7 @@
 切分策略（方案 4.1）：按 `## ` 二级标题切分，天然对齐"一个问题一个 chunk"，
 超长章节再按 ~500 token（近似 800 字符）二次切分，10% 重叠。
 """
+import hashlib
 import re
 from pathlib import Path
 
@@ -12,6 +13,15 @@ from app.rag.store import replace_chunks
 KNOWLEDGE_DIR = Path("knowledge")
 MAX_CHARS = 800
 OVERLAP = 80
+
+
+def knowledge_fingerprint() -> str:
+    """知识库内容指纹：文件路径 + 内容的 sha256，启动时比对决定是否自动重建索引。"""
+    h = hashlib.sha256()
+    for path in sorted(KNOWLEDGE_DIR.rglob("*.md")):
+        h.update(str(path).encode())
+        h.update(path.read_bytes())
+    return h.hexdigest()
 
 
 def parse_front_matter(text: str) -> tuple[dict, str]:
@@ -72,12 +82,27 @@ def load_chunks() -> list[dict]:
 
 
 async def ingest(pool) -> dict:
-    """全量摄取：加载 → 向量化 → 重建索引。返回统计信息。"""
+    """全量摄取：加载 → 向量化 → 重建索引，成功后记录内容指纹。返回统计信息。"""
     chunks = load_chunks()
     if not chunks:
         return {"chunks": 0, "message": "no knowledge files found"}
     embeddings = await embed_texts([c["content"] for c in chunks])
     await replace_chunks(pool, chunks, embeddings)
+    async with pool.connection() as conn:
+        await conn.execute(
+            """INSERT INTO kb_meta (key, value, updated_at) VALUES ('fingerprint', %s, now())
+               ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()""",
+            (knowledge_fingerprint(),))
     langs = {c["lang"] for c in chunks}
     return {"chunks": len(chunks), "docs": len({c["doc_title"] for c in chunks}),
             "langs": sorted(langs)}
+
+
+async def ingest_if_changed(pool) -> dict | None:
+    """启动时调用：知识库内容指纹与库内记录不一致才重建，部署新语料后无需手动 reindex。"""
+    async with pool.connection() as conn:
+        row = await (await conn.execute(
+            "SELECT value FROM kb_meta WHERE key = 'fingerprint'")).fetchone()
+    if row and row["value"] == knowledge_fingerprint():
+        return None
+    return await ingest(pool)

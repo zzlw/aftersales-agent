@@ -30,6 +30,13 @@ CREATE INDEX IF NOT EXISTS kb_chunks_embedding_idx
 CREATE INDEX IF NOT EXISTS kb_chunks_tsv_idx
     ON kb_chunks USING gin (tsv);
 
+-- 知识库元信息（内容指纹等），启动时比对决定是否自动重建索引
+CREATE TABLE IF NOT EXISTS kb_meta (
+    key        text PRIMARY KEY,
+    value      text NOT NULL,
+    updated_at timestamptz DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS tickets (
     id            serial PRIMARY KEY,
     session_id    text NOT NULL,

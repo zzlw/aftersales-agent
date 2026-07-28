@@ -101,7 +101,7 @@
 |---|---|---|
 | 代码托管 | GitHub（本仓库，MIT 开源） | `main` 为生产分支 |
 | 前端 CI/CD | Vercel 原生 Git 集成 | **push main → 自动构建 + 生产部署**；PR → 自动 Preview 环境；Root Directory 设为 `frontend/`（monorepo 子目录） |
-| 前端托管 | Vercel Serverless | SSR + 三个 Route Handler（`/api/chat` `/api/history/[sid]` `/api/ticket`）仅做代理，通过环境变量 `BACKEND_URL` 转发到 Railway |
+| 前端托管 | Vercel Serverless | SSR + 四个 Route Handler（`/api/chat` `/api/chat/stream/[sid]` `/api/history/[sid]` `/api/ticket`）仅做代理，通过环境变量 `BACKEND_URL` 转发到 Railway |
 | 后端托管 | Railway 容器（Dockerfile 构建） | 常驻进程支持 SSE 长连接；启动时检测知识库为空则自动 ingest |
 | 数据库 | Railway PostgreSQL（pgvector 镜像 + 持久化卷） | 向量检索 / 全文检索 / 工单 / LangGraph checkpoint 同库 |
 | 密钥管理 | Vercel / Railway 环境变量 | `.env` 不入库，仓库仅提供 `.env.example` 占位模板 |
@@ -127,6 +127,8 @@
 6. **知识库盲区兜底**：改写重试一次 → 坦诚告知 → suggest 转人工工单
 7. **多语言**：中英文知识库 + 自动识别语言 + 同语言回复
 8. **SSE 8 帧协议**：status / thinking / tool / delta / citation / suggest / done / error
+9. **全量消息持久化**：引用溯源 / 执行过程 / 建议问题随消息写入 checkpoint，刷新后 SSR 完整回放
+10. **完整流恢复（ChatGPT 同款）**：生成与连接解耦，生成中刷页面自动重连并无损续播流式回答
 
 ## 快速启动
 
@@ -223,6 +225,20 @@ aftersales-agent/
 | `done` | 对话结束 | `{"session_id":"..."}` |
 | `error` | 错误信息 | `{"message":"...","code":"..."}` |
 
+### 流恢复（ChatGPT 同款）
+
+生成与 SSE 连接完全解耦，客户端断连 / 刷新不会丢失正在生成的回答：
+
+```
+POST /api/chat ──启动──▶ 后台 asyncio 任务跑 LangGraph（断连不取消）
+                              │ 帧写入 RunBuffer（内存帧缓冲）
+HTTP 响应 ◀──订阅── RunBuffer ◀──订阅── GET /api/chat/stream/{sid}（重连重放+续播）
+```
+
+- **生成不中断**：graph 在后台任务执行，HTTP 响应只是缓冲的一个订阅者，断连后照常跑完并写 checkpoint
+- **重连无损续播**：`/api/history` 返回 `generating` 标志，前端命中则重连流恢复端点，从第 0 帧重放全部已产生帧并续播新帧直到 done，流式动画完整重建
+- **完成后容错**：done 后缓冲保留 120s，容忍「刚完成即刷新」的重连竞态；单实例部署用进程内缓冲，多实例可平滑替换为 Redis Pub/Sub
+
 ## 设计亮点
 
 - **产品线校验先行**：阻止"服务器保修"词面命中"笔记本保修"文档的误判
@@ -230,3 +246,5 @@ aftersales-agent/
 - **延迟控制**：路由一次结构化调用 6 项判断；grade 规则短路避免 90% 场景的 LLM 调用
 - **Prompt 注入防护**：域外意图识别 + system prompt 角色锁定，经测试抵御 DAN/越狱攻击
 - **会话持久化**：LangGraph AsyncPostgresSaver 自动管理，刷新页面会话不丢失
+- **刷新前后一致**：citations / timeline / suggests 作为消息元数据随 checkpoint 落库，喂 LLM 的历史消息另行净化为纯 role/content，两不干扰
+- **流恢复**：生成中刷新不丢回答，重连后从头重放并续播（见上文「流恢复」一节）

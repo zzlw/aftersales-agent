@@ -223,35 +223,40 @@ export default function Chat({
 
   return (
     <div className="flex h-dvh w-full flex-col">
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-card px-6">
-        <div className="flex items-center gap-3">
-          <div className="flex size-9 items-center justify-center rounded-lg bg-primary">
+      <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 sm:px-6">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary">
             <span className="text-sm font-bold text-primary-foreground">L</span>
           </div>
-          <div>
-            <h1 className="text-base font-semibold tracking-tight">售后智能客服</h1>
-            <p className="text-xs text-muted-foreground">Lenovo Aftersales Agent · LangGraph + RAG</p>
+          <div className="min-w-0">
+            <h1 className="truncate text-base font-semibold tracking-tight">售后智能客服</h1>
+            {/* 副标题仅在 ≥sm 展示，避免窄屏换行撑破固定高度 header */}
+            <p className="hidden truncate text-xs text-muted-foreground sm:block">
+              Lenovo Aftersales Agent · LangGraph + RAG
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          {/* 主次层级：转人工为关键出口用 outline，新会话为轻量操作用 ghost */}
+        <div className="flex shrink-0 items-center gap-1.5">
+          {/* 主次层级：转人工为关键出口用 outline，新会话为轻量操作用 ghost；小屏收纳为纯图标 */}
           <Button
             variant="ghost"
             size="sm"
             className="text-muted-foreground hover:text-foreground active:scale-[0.98]"
+            aria-label="新会话"
             onClick={newSession}
           >
             <SquarePen />
-            新会话
+            <span className="hidden sm:inline">新会话</span>
           </Button>
           <Button
             variant="outline"
             size="sm"
             className="bg-card active:scale-[0.98]"
+            aria-label="转人工工单"
             onClick={() => setShowTicket(true)}
           >
             <Headset />
-            转人工工单
+            <span className="hidden sm:inline">转人工工单</span>
           </Button>
           {/* 开源仓库入口 */}
           <Button
@@ -273,7 +278,7 @@ export default function Chat({
       </header>
 
       <ScrollArea className="min-h-0 flex-1">
-        <main className="mx-auto w-full max-w-4xl space-y-4 px-6 py-6">
+        <main className="mx-auto w-full max-w-4xl space-y-4 px-4 py-6 sm:px-6">
           {messages.length === 0 && (
             <motion.div
               className="mt-16 text-center"
@@ -457,7 +462,7 @@ export default function Chat({
         </main>
       </ScrollArea>
 
-      <footer className="shrink-0 border-t border-border bg-card px-6 py-3">
+      <footer className="shrink-0 border-t border-border bg-card px-4 py-3 sm:px-6">
         <form
           onSubmit={(e) => {
             e.preventDefault();

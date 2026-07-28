@@ -259,8 +259,9 @@ async def _grade(docs: list[dict], product_line: str, query: str) -> str:
     if not docs:
         return "none"
     # ① 产品线校验：用户产品线明确时，过滤不匹配的命中，防"词面相近误判"
+    #    通用文档（product_line=unknown，如服务渠道/价格/隐私政策）跨产品线适用，予以豁免
     if product_line != "unknown":
-        matched = [d for d in docs if d["product_line"] == product_line]
+        matched = [d for d in docs if d["product_line"] in (product_line, "unknown")]
         if not matched:
             return "none"
         docs = matched

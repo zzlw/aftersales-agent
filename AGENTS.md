@@ -22,12 +22,12 @@ pnpm install
 pnpm dev          # 默认 3000；本地惯用 pnpm dev -p 3003
 pnpm build        # 提交前必须通过
 
-# 后端开发（backend/ 目录）
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+# 后端开发（backend/ 目录，uv 项目模式）
+uv sync
+uv run --env-file ../.env uvicorn app.main:app --reload --port 8000
 
 # 知识库重建索引
-python -m app.rag.ingest
+uv run --env-file ../.env python -m app.rag.ingest
 ```
 
 - 环境变量以 `.env.example` 为准；`BACKEND_URL` 是前端 Route Handler 代理后端的地址（默认 `http://localhost:8000`）。

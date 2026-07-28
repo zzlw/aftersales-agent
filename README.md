@@ -204,7 +204,8 @@ aftersales-agent/
 │   │   ├── config.py       # 配置管理
 │   │   └── main.py         # 应用入口
 │   ├── Dockerfile          # 本地 Docker Compose 构建
-│   └── requirements.txt
+│   ├── pyproject.toml      # 依赖声明（uv 项目模式）
+│   └── uv.lock             # 全依赖树锁定
 ├── frontend/
 │   └── src/
 │       ├── app/

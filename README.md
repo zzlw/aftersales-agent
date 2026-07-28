@@ -56,19 +56,16 @@ flowchart TB
         direction TB
         subgraph SG["LangGraph StateGraph"]
             direction TB
-            S([START]) --> router[intent_router] --> decision{route_decision}
-            decision --> clarify[clarify]
-            decision --> repeat[repeat]
-            decision --> redirect[redirect]
-            decision --> retrieve[retrieve]
-            retrieve --> grade{grade}
-            grade --> generate[generate]
-            grade --> fallback[fallback]
-            generate --> E([END])
-            fallback --> E
+            S([START]) --> router[intent_router]
+            router -->|repeat| repeat[repeat] --> E([END])
+            router -->|redirect| redirect[redirect] --> E
+            router -->|clarify| clarify[clarify] --> E
+            router -->|retrieve| retrieve[retrieve] --> grade[grade]
+            grade -->|sufficient / partial| generate[generate] --> E
+            grade -->|none| fallback[fallback] --> E
         end
-        LLM["LLM 适配层（OpenAI SDK）"]
-        RAG["RAG 混合检索（RRF）<br/>pgvector + tsvector"]
+        retrieve -.混合检索.-> RAG["RAG（RRF 融合）<br/>pgvector + tsvector"]
+        generate -.结构化 / 流式调用.-> LLM["LLM 适配层（OpenAI SDK）"]
     end
 
     BE --> DB[("PostgreSQL 16 + pgvector<br/>kb_chunks · tickets · checkpoints")]
@@ -101,7 +98,7 @@ flowchart LR
 | 代码托管 | GitHub（本仓库，MIT 开源） | `main` 为生产分支 |
 | 前端 CI/CD | Vercel 原生 Git 集成 | **push main → 自动构建 + 生产部署**；PR → 自动 Preview 环境；Root Directory 设为 `frontend/`（monorepo 子目录） |
 | 前端托管 | Vercel Serverless | SSR + 四个 Route Handler（`/api/chat` `/api/chat/stream/[sid]` `/api/history/[sid]` `/api/ticket`）仅做代理，通过环境变量 `BACKEND_URL` 转发到 Railway |
-| 后端托管 | Railway 容器（Dockerfile 构建） | 常驻进程支持 SSE 长连接；启动时检测知识库为空则自动 ingest |
+| 后端托管 | Railway 容器（Dockerfile 构建） | 常驻进程支持 SSE 长连接；启动时按知识库内容指纹比对，语料变更则自动重建索引 |
 | 数据库 | Railway PostgreSQL（pgvector 镜像 + 持久化卷） | 向量检索 / 全文检索 / 工单 / LangGraph checkpoint 同库 |
 | 密钥管理 | Vercel / Railway 环境变量 | `.env` 不入库，仓库仅提供 `.env.example` 占位模板 |
 
@@ -110,10 +107,10 @@ flowchart LR
 Vercel 默认域名在国内网络环境下常不稳定。为提升国内可达性，额外绑定一个子域名，在域名的**权威 DNS（Cloudflare）**上 **CNAME 到 Vercel 专为中国大陆优化的节点** `cname-china.vercel-dns.com`（区别于默认的 `cname.vercel-dns.com`）：
 
 ```mermaid
-flowchart TB
-    U["国内用户"] --> DNS["aftersales.jiawen.live<br/>Cloudflare DNS 解析（权威，DNS only 灰云）"]
-    DNS -- CNAME --> CN["cname-china.vercel-dns.com<br/>（Vercel 中国区优化节点）"]
-    CN -- 回源 --> VE["Vercel Edge → frontend 项目<br/>（自动签发 SSL 证书）"]
+flowchart LR
+    U["国内用户"] -->|"① DNS 查询 aftersales.jiawen.live"| CF["Cloudflare 权威 DNS<br/>（DNS only 灰云）"]
+    CF -->|"② CNAME → cname-china.vercel-dns.com<br/>解析出中国区优化节点 IP"| U
+    U -->|"③ HTTPS 直连优化节点"| VE["Vercel Edge → frontend 项目<br/>（自动签发 SSL 证书）"]
 ```
 
 关键点：

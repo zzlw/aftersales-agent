@@ -2,7 +2,7 @@
 
 <p align="left">
   <a href="https://frontend-tau-green-71.vercel.app"><img src="https://img.shields.io/badge/Live_Demo-online-success?logo=vercel&logoColor=white" alt="Live Demo"></a>
-  <a href="https://aftersales.jiawen.live"><img src="https://img.shields.io/badge/国内镜像-aftersales.jiawen.live-orange?logo=alibabacloud&logoColor=white" alt="China Mirror"></a>
+  <a href="https://aftersales.jiawen.live"><img src="https://img.shields.io/badge/国内镜像-aftersales.jiawen.live-orange?logo=cloudflare&logoColor=white" alt="China Mirror"></a>
   <a href="https://github.com/zzlw/aftersales-agent/deployments"><img src="https://img.shields.io/github/deployments/zzlw/aftersales-agent/production?label=CI%2FCD&logo=githubactions&logoColor=white" alt="CI/CD"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License: MIT"></a>
   <a href="https://github.com/zzlw/aftersales-agent/commits/main"><img src="https://img.shields.io/github/last-commit/zzlw/aftersales-agent?logo=git&logoColor=white" alt="Last Commit"></a>
@@ -29,7 +29,7 @@
 > 🚀 **在线体验**（默认地址）：https://frontend-tau-green-71.vercel.app
 >
 > 🇨🇳 **国内访问**：若上方 Vercel 默认域名因国内网络环境无法打开，请改用镜像域名 https://aftersales.jiawen.live 访问。
-> 该镜像通过阿里云 DNS 将子域名 CNAME 到 Vercel 中国区优化节点（`cname-china.vercel-dns.com`）实现国内可达。
+> 该镜像通过 Cloudflare DNS（域名权威）将子域名以 DNS only 方式 CNAME 到 Vercel 中国区优化节点（`cname-china.vercel-dns.com`）实现国内可达。
 > ⚠️ **注意**：`aftersales.jiawen.live` 为临时演示域名，可能因域名到期而随时失效，以 Vercel 默认域名为准。
 
 ## 技术栈
@@ -111,13 +111,13 @@
 | 数据库 | Railway PostgreSQL（pgvector 镜像 + 持久化卷） | 向量检索 / 全文检索 / 工单 / LangGraph checkpoint 同库 |
 | 密钥管理 | Vercel / Railway 环境变量 | `.env` 不入库，仓库仅提供 `.env.example` 占位模板 |
 
-### 国内访问（阿里云 DNS + Vercel 中国区节点）
+### 国内访问（Cloudflare DNS + Vercel 中国区节点）
 
-Vercel 默认域名在国内网络环境下常不稳定。为提升国内可达性，额外绑定一个由阿里云 DNS 托管的子域名，**CNAME 到 Vercel 专为中国大陆优化的节点** `cname-china.vercel-dns.com`（区别于默认的 `cname.vercel-dns.com`）：
+Vercel 默认域名在国内网络环境下常不稳定。为提升国内可达性，额外绑定一个子域名，在域名的**权威 DNS（Cloudflare）**上 **CNAME 到 Vercel 专为中国大陆优化的节点** `cname-china.vercel-dns.com`（区别于默认的 `cname.vercel-dns.com`）：
 
 ```
 国内用户 → aftersales.jiawen.live
-                │ 阿里云 DNS 解析（权威）
+                │ Cloudflare DNS 解析（权威，DNS only 灰云）
                 ▼ CNAME
         cname-china.vercel-dns.com（Vercel 中国区优化节点）
                 │
@@ -126,15 +126,17 @@ Vercel Edge → frontend 项目（自动签发 SSL 证书）
 ```
 
 关键点：
-- **子域名 CNAME 委托**：无需修改 apex 域 `jiawen.live` 的 NS（apex 仍托管在原服务商），Vercel 自动识别 CNAME 并签发 Let's Encrypt 证书
+- **记录必须加在权威 DNS 上**：域名 NS 实际委托给谁，记录就必须加在谁那里（本域 NS 在 Cloudflare，在其他 DNS 服务商控制台加的记录公网不可见），可用 `dig NS <domain>` 确认
+- **必须 DNS only（灰云）**：关闭 Cloudflare 代理，让流量直达 Vercel 中国节点；开橙云会绕行 Cloudflare 代理、失去中国节点意义且与 Vercel 证书冲突
 - **中国区节点**：`cname-china.vercel-dns.com` 走境内可达链路，规避默认节点在国内的高延迟 / 不可达问题
 - **临时性**：`aftersales.jiawen.live` 为演示用临时域名，可能因域名到期失效，生产以 Vercel 默认域名为准
 
 ```bash
-# 复现方式（阿里云 CLI + Vercel CLI）
+# 复现方式（Vercel CLI + Cloudflare API）
 vercel domains add aftersales.jiawen.live <project>
-aliyun alidns AddDomainRecord --DomainName jiawen.live \
-  --RR aftersales --Type CNAME --Value cname-china.vercel-dns.com
+curl -X POST "https://api.cloudflare.com/client/v4/zones/<zone_id>/dns_records" \
+  -H "Authorization: Bearer <api_token>" -H "Content-Type: application/json" \
+  -d '{"type":"CNAME","name":"aftersales","content":"cname-china.vercel-dns.com","proxied":false}'
 ```
 
 ## 第三方服务清单

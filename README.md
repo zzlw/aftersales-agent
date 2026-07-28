@@ -208,27 +208,37 @@ aftersales-agent/
 │   │   │   ├── prompts.py  # Prompt 模板
 │   │   │   └── state.py    # AgentState 定义
 │   │   ├── api/            # FastAPI 路由
-│   │   │   ├── chat.py     # SSE 对话端点
+│   │   │   ├── chat.py     # SSE 对话端点 + RunBuffer 流恢复
 │   │   │   ├── kb.py       # 知识库管理
 │   │   │   └── ticket.py   # 工单 API
 │   │   ├── llm/
 │   │   │   └── client.py   # 模型适配层
 │   │   ├── rag/
-│   │   │   ├── ingest.py   # 知识库摄取管线
+│   │   │   ├── ingest.py   # 知识库摄取管线（含内容指纹）
 │   │   │   └── store.py    # 混合检索实现
 │   │   ├── config.py       # 配置管理
 │   │   └── main.py         # 应用入口
-│   ├── Dockerfile
+│   ├── Dockerfile          # 本地 Docker Compose 构建
 │   └── requirements.txt
 ├── frontend/
 │   └── src/
-│       ├── components/Chat.tsx  # 聊天主组件
-│       ├── lib/sse.ts           # SSE 解析器
-│       └── app/                 # Next.js 页面
-├── knowledge/              # 知识库语料
+│       ├── app/
+│       │   ├── api/                 # 4 个 Route Handler（代理转发 BACKEND_URL）
+│       │   │   ├── chat/            # POST 对话；stream/[sid] 流恢复重连
+│       │   │   ├── history/[sid]/   # 历史消息 + generating 标志
+│       │   │   └── ticket/          # 工单提交
+│       │   └── layout.tsx / page.tsx  # SSR 页面
+│       ├── components/
+│       │   ├── Chat.tsx        # 聊天主组件
+│       │   └── ui/             # shadcn/ui 组件
+│       └── lib/sse.ts          # SSE 解析器
+├── knowledge/              # 知识库语料（14 篇：5 产品线 + 通用政策）
 │   ├── zh/                 # 中文文档
 │   └── en/                 # 英文文档
-├── docker-compose.yml
+├── docker-compose.yml      # 本地一键启动（backend + db）
+├── Dockerfile.railway      # Railway 后端镜像（app + knowledge 打包）
+├── railway.json            # Railway 构建配置
+├── AGENTS.md               # AI 协作约束文档
 ├── .env.example
 └── demo.sh                 # 演示脚本
 ```

@@ -47,59 +47,53 @@
 
 ## 架构概览
 
-```
-┌─────────────────────────────────────────────────┐
-│                   Frontend (Next.js)             │
-│   SSE 流式渲染 / 引用卡片 / 工单弹窗 / 会话恢复   │
-└────────────────────────┬────────────────────────┘
-                         │ POST /api/chat (SSE)
-┌────────────────────────▼────────────────────────┐
-│                  Backend (FastAPI)                │
-│                                                  │
-│  ┌──────────────────────────────────────────┐   │
-│  │           LangGraph StateGraph            │   │
-│  │                                           │   │
-│  │  START → intent_router → route_decision   │   │
-│  │              ↙   ↓   ↓   ↘               │   │
-│  │      clarify repeat redirect retrieve     │   │
-│  │                              ↓            │   │
-│  │                           grade           │   │
-│  │                          ↙     ↘          │   │
-│  │                   generate   fallback     │   │
-│  │                      ↓          ↓         │   │
-│  │                         END               │   │
-│  └──────────────────────────────────────────┘   │
-│                                                  │
-│  ┌─────────────┐  ┌─────────────────────────┐   │
-│  │  LLM 适配层  │  │  RAG: 混合检索 (RRF)    │   │
-│  │  (OpenAI SDK)│  │  pgvector + tsvector    │   │
-│  └─────────────┘  └─────────────────────────┘   │
-└────────────────────────┬────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────┐
-│          PostgreSQL 16 + pgvector                │
-│   kb_chunks (向量+全文) │ tickets │ checkpoints  │
-└─────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    FE["Frontend（Next.js）<br/>SSE 流式渲染 · 引用卡片 · 工单弹窗 · 会话恢复"]
+    FE -- "POST /api/chat（SSE）" --> BE
+
+    subgraph BE["Backend（FastAPI）"]
+        direction TB
+        subgraph SG["LangGraph StateGraph"]
+            direction TB
+            S([START]) --> router[intent_router] --> decision{route_decision}
+            decision --> clarify[clarify]
+            decision --> repeat[repeat]
+            decision --> redirect[redirect]
+            decision --> retrieve[retrieve]
+            retrieve --> grade{grade}
+            grade --> generate[generate]
+            grade --> fallback[fallback]
+            generate --> E([END])
+            fallback --> E
+        end
+        LLM["LLM 适配层（OpenAI SDK）"]
+        RAG["RAG 混合检索（RRF）<br/>pgvector + tsvector"]
+    end
+
+    BE --> DB[("PostgreSQL 16 + pgvector<br/>kb_chunks · tickets · checkpoints")]
 ```
 
 ## 云端部署与 CI/CD
 
 生产环境采用“前后端分离部署”：前端跑在 Vercel（Serverless / Edge），后端和数据库跑在 Railway（常驻容器）——因为 LangGraph 冷启动重、SSE 长连接会被 Serverless 执行时长限制掰断，不适合函数化。
 
-```
-        用户浏览器
-            │ HTTPS
-┌───────────▼────────────┐      ┌────────────────────────┐
-│   Vercel（前端）          │      │   Railway（后端）           │
-│  · Next.js SSR 预渲染      │ SSE  │  · FastAPI + LangGraph      │
-│  · /api/* Route Handler   │────▶│  · 启动时自动 ingest 知识库 │
-│    （代理转发 BACKEND_URL）│      │            │                │
-└────────────────────────┘      │  ┌────────▼─────────┐   │
-            ▲                      │  │ PostgreSQL 16      │   │
-            │ push main 自动部署    │  │ + pgvector（持久卷）│   │
-┌───────────┴────────────┐      │  └───────────────────┘   │
-│   GitHub（开源仓库）       │      └────────────────────────┘
-└────────────────────────┘
+```mermaid
+flowchart LR
+    U["用户浏览器"] -- HTTPS --> V
+
+    subgraph V["Vercel（前端）"]
+        FE["Next.js SSR 预渲染<br/>/api/* Route Handler<br/>（代理转发 BACKEND_URL）"]
+    end
+
+    subgraph R["Railway（后端）"]
+        API["FastAPI + LangGraph<br/>启动时指纹比对自动 ingest 知识库"]
+        PG[("PostgreSQL 16<br/>+ pgvector（持久卷）")]
+        API --> PG
+    end
+
+    FE -- SSE --> API
+    GH["GitHub（开源仓库）"] -- "push main 自动部署" --> V
 ```
 
 | 环节 | 平台 / 方式 | 说明 |
@@ -115,14 +109,11 @@
 
 Vercel 默认域名在国内网络环境下常不稳定。为提升国内可达性，额外绑定一个子域名，在域名的**权威 DNS（Cloudflare）**上 **CNAME 到 Vercel 专为中国大陆优化的节点** `cname-china.vercel-dns.com`（区别于默认的 `cname.vercel-dns.com`）：
 
-```
-国内用户 → aftersales.jiawen.live
-                │ Cloudflare DNS 解析（权威，DNS only 灰云）
-                ▼ CNAME
-        cname-china.vercel-dns.com（Vercel 中国区优化节点）
-                │
-                ▼ 回源
-Vercel Edge → frontend 项目（自动签发 SSL 证书）
+```mermaid
+flowchart TB
+    U["国内用户"] --> DNS["aftersales.jiawen.live<br/>Cloudflare DNS 解析（权威，DNS only 灰云）"]
+    DNS -- CNAME --> CN["cname-china.vercel-dns.com<br/>（Vercel 中国区优化节点）"]
+    CN -- 回源 --> VE["Vercel Edge → frontend 项目<br/>（自动签发 SSL 证书）"]
 ```
 
 关键点：
@@ -185,7 +176,7 @@ cp .env.example .env
 # 3. 启动后端服务（含数据库）
 docker compose up -d
 
-# 4. 索引知识库
+# 4. 索引知识库（可选：启动时会按内容指纹自动摄取，此命令仅用于手动强制重建）
 curl -X POST http://localhost:8000/api/kb/reindex
 
 # 5. 启动前端
@@ -262,10 +253,21 @@ aftersales-agent/
 
 生成与 SSE 连接完全解耦，客户端断连 / 刷新不会丢失正在生成的回答：
 
-```
-POST /api/chat ──启动──▶ 后台 asyncio 任务跑 LangGraph（断连不取消）
-                              │ 帧写入 RunBuffer（内存帧缓冲）
-HTTP 响应 ◀──订阅── RunBuffer ◀──订阅── GET /api/chat/stream/{sid}（重连重放+续播）
+```mermaid
+sequenceDiagram
+    participant C as 客户端
+    participant API as FastAPI
+    participant BUF as RunBuffer（内存帧缓冲）
+    participant BG as 后台任务（LangGraph）
+
+    C->>API: POST /api/chat
+    API->>BG: create_task 启动（断连不取消）
+    BG-->>BUF: 帧持续写入
+    BUF-->>C: SSE 订阅推送
+    Note over C: 断连 / 刷新页面
+    BG-->>BUF: 生成照常进行，写 checkpoint
+    C->>API: GET /api/chat/stream/{sid}（重连）
+    BUF-->>C: 从第 0 帧重放 + 续播直到 done
 ```
 
 - **生成不中断**：graph 在后台任务执行，HTTP 响应只是缓冲的一个订阅者，断连后照常跑完并写 checkpoint

@@ -1,4 +1,4 @@
-# 售后智能客服 Agent — POC
+# 售后智能客服 Agent
 
 <p align="left">
   <a href="https://frontend-tau-green-71.vercel.app"><img src="https://img.shields.io/badge/Live_Demo-online-success?logo=vercel&logoColor=white" alt="Live Demo"></a> <a href="https://aftersales.jiawen.live"><img src="https://img.shields.io/badge/国内镜像-aftersales.jiawen.live-orange?logo=cloudflare&logoColor=white" alt="China Mirror"></a> <a href="https://github.com/zzlw/aftersales-agent/deployments"><img src="https://img.shields.io/github/deployments/zzlw/aftersales-agent/production?label=CI%2FCD&logo=githubactions&logoColor=white" alt="CI/CD"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License: MIT"></a> <a href="https://github.com/zzlw/aftersales-agent/commits/main"><img src="https://img.shields.io/github/last-commit/zzlw/aftersales-agent?logo=git&logoColor=white" alt="Last Commit"></a>

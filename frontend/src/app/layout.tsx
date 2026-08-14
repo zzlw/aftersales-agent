@@ -4,7 +4,7 @@ import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "售后智能客服 · Aftersales Agent POC",
+  title: "售后智能客服 · Aftersales Agent",
   description: "多轮对话售后技术支持 Agent（LangGraph + RAG）",
 };
 

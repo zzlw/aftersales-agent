@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/aftersales-demo.png" width="720" alt="售后智能客服 Demo 截图">
+  <img src="images/aftersales-demo.png" width="720" alt="售后智能客服 Demo 截图">
 </p>
 
 基于 **LangGraph + RAG** 的多轮对话售后客服系统，支持意图识别、知识库检索、引用溯源、工单创建与多语言服务。

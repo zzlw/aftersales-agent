@@ -8,6 +8,10 @@
   <img src="https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs&logoColor=white" alt="Next.js 16"> <img src="https://img.shields.io/badge/React-19-087ea4?logo=react&logoColor=white" alt="React 19"> <img src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" alt="TypeScript"> <img src="https://img.shields.io/badge/Tailwind_CSS-v4-38BDF8?logo=tailwindcss&logoColor=white" alt="Tailwind CSS v4"> <img src="https://img.shields.io/badge/shadcn%2Fui-new--york-18181B?logo=shadcnui&logoColor=white" alt="shadcn/ui"> <img src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white" alt="Python 3.12"> <img src="https://img.shields.io/badge/FastAPI-SSE-009688?logo=fastapi&logoColor=white" alt="FastAPI"> <img src="https://img.shields.io/badge/LangGraph-0.4-1C3C3C?logo=langchain&logoColor=white" alt="LangGraph"> <img src="https://img.shields.io/badge/PostgreSQL-16_%2B_pgvector-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL + pgvector"> <img src="https://img.shields.io/badge/Vercel-frontend-black?logo=vercel&logoColor=white" alt="Vercel"> <img src="https://img.shields.io/badge/Railway-backend%20%2B%20db-0B0D0E?logo=railway&logoColor=white" alt="Railway"> <img src="https://img.shields.io/badge/DeepSeek-LLM-4D6BFE" alt="DeepSeek"> <img src="https://img.shields.io/badge/SiliconFlow-bge--m3-8A2BE2" alt="SiliconFlow">
 </p>
 
+<p align="center">
+  <img src="docs/images/aftersales-demo.png" width="720" alt="售后智能客服 Demo 截图">
+</p>
+
 基于 **LangGraph + RAG** 的多轮对话售后客服系统，支持意图识别、知识库检索、引用溯源、工单创建与多语言服务。
 
 > 🚀 **在线体验**（默认地址）：https://frontend-tau-green-71.vercel.app
